@@ -1,0 +1,6 @@
+sendquota plugin for the roundcube webmail
+
+Installation: See, INSTALL
+
+This plugin will limit the number of mail sent per user.
+

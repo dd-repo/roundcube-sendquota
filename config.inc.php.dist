@@ -1,0 +1,27 @@
+<?php
+
+/* sendquota plugin */
+
+// ldap configuration
+$rcmail_config['ldap_sendquota_host'] = '';
+$rcmail_config['ldap_sendquota_dn'] = '';
+
+// quota database configuration
+$rcmail_config['db_sendquota_host'] = '';
+$rcmail_config['db_sendquota_user'] = '';
+$rcmail_config['db_sendquota_pass'] = '';
+$rcmail_config['db_sendquota_base'] = '';
+
+/* account without quota */
+$rcmail_config['no_sendquota'] = array('');
+
+/* Log over quotas */
+$rcmail_config['sendquota_log'] = TRUE;
+
+/* Log errors */
+$rcmail_config['sendquota_log_error'] = TRUE;
+
+/* Log debug */
+$rcmail_config['sendquota_log_debug'] = TRUE;
+
+?>
