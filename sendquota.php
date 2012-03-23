@@ -2,31 +2,34 @@
 /**
  * sendquota
  *
- * @version 0.1 - 19.03.2012
+ * @version 1.0 - 23.03.2012
  * @author Yann Autissier
  * @website http://www.olympe-network.com
  * @licence GNU GPL V3
+ * 
+ * this plugin is freely inspired from blockspamsending
+ * at http://myroundcube.googlecode.com (thanks !)
  *
  **/
- 
+
 /**
  * Usage: This plugin implements quota in roundcube for Olympe Network
  * User account is stored in ldap, and quota in mysql
  *
- **/ 
- 
+ **/
+
 class sendquota extends rcube_plugin
 {
     public $task = 'mail|settings';
-    
+
     static private $db = null;
     static private $ldb = null;
 
     static private $userId = null;
     static private $userQuota = array( 'used' => null, 'max' => null );
 
-    private $ldap_get_userlogin             = '(&(mail=%email)(objectclass=posixAccount)(objectclass=inetMailUser))';
-    private $sql_select_userid                = "SELECT user_id FROM hosting_user WHERE user_login='%userLogin'";
+    private $ldap_get_userlogin           = "(&(mail=%email)(objectclass=posixAccount)(objectclass=inetMailUser))";
+    private $sql_select_userid            = "SELECT user_id FROM hosting_user WHERE user_login='%userLogin'";
     private $sql_select_userquota         = "SELECT quota_used, quota_max FROM hosting_quota WHERE quota_user='%userId' and quota_resource = 5";
     private $sql_update_userquota         = "UPDATE hosting_quota SET quota_used=%quota WHERE quota_user='%userId' and quota_resource = 5";
 
@@ -35,8 +38,8 @@ class sendquota extends rcube_plugin
     static private $author = 'support@olympe-network.com';
     static private $authors_comments = null;
     static private $download = 'http://github.com/anotherservice/sendquota';
-    static private $version = '0.1';
-    static private $date = '22-03-2012';
+    static private $version = '1.0';
+    static private $date = '23-03-2012';
     static private $licence = 'GPL';
     static private $requirements = array(
         'Roundcube' => '0.7.1',
@@ -56,7 +59,7 @@ class sendquota extends rcube_plugin
         }
         $this->add_hook( 'message_outgoing_headers', array( $this,'sendquota_check' ) );
     }
-    
+
     static public function about($keys = false)
     {
         $requirements = self::$requirements;
@@ -110,7 +113,7 @@ class sendquota extends rcube_plugin
             return $ret;
         }
     }
-    
+
     function sendquota_check($args)
     {
         $rcmail = rcmail::get_instance();
@@ -237,7 +240,8 @@ class sendquota extends rcube_plugin
         }
 
         $close = @mysql_close( $this->db );
-        $this->log_debug( 'quota updated for user : '.$rcmail->user->data['username'].', IP : '.$this->getVisitorIP() );
+        $quota = $this->userQuota['used'] + $count;
+        $this->log( 'quota updated for user : '.$rcmail->user->data['username'].', quota : '.$quota.', IP : '.$this->getVisitorIP() );
         return $args;
 
     }
@@ -290,7 +294,7 @@ class sendquota extends rcube_plugin
     }
 
     function getUserId()
-    { 
+    {
         $rcmail = rcmail::get_instance();
         $sql = str_replace('%userLogin', $this->userLogin, $this->sql_select_userid );
         $res = @mysql_query( $sql, $this->db );
@@ -318,7 +322,7 @@ class sendquota extends rcube_plugin
     }
 
     function getUserQuota()
-    { 
+    {
         $rcmail = rcmail::get_instance();
         $sql = str_replace('%userId', $this->userId, $this->sql_select_userquota);
         $res = @mysql_query( $sql, $this->db );
@@ -346,7 +350,7 @@ class sendquota extends rcube_plugin
     }
 
     function updateUserQuota( $count )
-    { 
+    {
         $rcmail = rcmail::get_instance();
         $quota = $this->userQuota['used'] + $count;
         $sql = $this->sql_update_userquota;
@@ -368,29 +372,29 @@ class sendquota extends rcube_plugin
         return false;
     }
 
-    function getVisitorIP() { 
-    
-        //Regular expression pattern for a valid IP address 
-        $ip_regexp = "/^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})/"; 
+    function getVisitorIP() {
 
-        //Retrieve IP address from which the user is viewing the current page 
-        if (isset ($HTTP_SERVER_VARS["HTTP_X_FORWARDED_FOR"]) && !empty ($HTTP_SERVER_VARS["HTTP_X_FORWARDED_FOR"])) { 
-            $visitorIP = (!empty ($HTTP_SERVER_VARS["HTTP_X_FORWARDED_FOR"])) ? $HTTP_SERVER_VARS["HTTP_X_FORWARDED_FOR"] : ((!empty ($HTTP_ENV_VARS['HTTP_X_FORWARDED_FOR'])) ? $HTTP_ENV_VARS['HTTP_X_FORWARDED_FOR'] : @ getenv ('HTTP_X_FORWARDED_FOR')); 
-        } 
-        else { 
-            $visitorIP = (!empty ($HTTP_SERVER_VARS['REMOTE_ADDR'])) ? $HTTP_SERVER_VARS['REMOTE_ADDR'] : ((!empty ($HTTP_ENV_VARS['REMOTE_ADDR'])) ? $HTTP_ENV_VARS['REMOTE_ADDR'] : @ getenv ('REMOTE_ADDR')); 
-        } 
+        //Regular expression pattern for a valid IP address
+        $ip_regexp = "/^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})/";
 
-        return $visitorIP; 
-    }     
-    
+        //Retrieve IP address from which the user is viewing the current page
+        if (isset ($HTTP_SERVER_VARS["HTTP_X_FORWARDED_FOR"]) && !empty ($HTTP_SERVER_VARS["HTTP_X_FORWARDED_FOR"])) {
+            $visitorIP = (!empty ($HTTP_SERVER_VARS["HTTP_X_FORWARDED_FOR"])) ? $HTTP_SERVER_VARS["HTTP_X_FORWARDED_FOR"] : ((!empty ($HTTP_ENV_VARS['HTTP_X_FORWARDED_FOR'])) ? $HTTP_ENV_VARS['HTTP_X_FORWARDED_FOR'] : @ getenv ('HTTP_X_FORWARDED_FOR'));
+        }
+        else {
+            $visitorIP = (!empty ($HTTP_SERVER_VARS['REMOTE_ADDR'])) ? $HTTP_SERVER_VARS['REMOTE_ADDR'] : ((!empty ($HTTP_ENV_VARS['REMOTE_ADDR'])) ? $HTTP_ENV_VARS['REMOTE_ADDR'] : @ getenv ('REMOTE_ADDR'));
+        }
+
+        return $visitorIP;
+    }
+
     function log( $log )
     {
         $rcmail = rcmail::get_instance();
         if( $rcmail->config->get( 'sendquota_log' ) )
         {
             write_log( 'sendquota', $log );
-        }    
+        }
     }
 
     function log_error( $log )
@@ -399,7 +403,7 @@ class sendquota extends rcube_plugin
         if( $rcmail->config->get( 'sendquota_log_error' ) )
         {
             write_log( 'sendquota', $log );
-        }    
+        }
     }
 
     function log_debug( $log )
@@ -408,7 +412,7 @@ class sendquota extends rcube_plugin
         if( $rcmail->config->get( 'sendquota_log_debug' ) )
         {
             write_log( 'sendquota', $log );
-        }    
+        }
     }
 
 }

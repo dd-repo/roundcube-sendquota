@@ -15,13 +15,13 @@ $rcmail_config['db_sendquota_base'] = '';
 /* account without quota */
 $rcmail_config['no_sendquota'] = array('');
 
-/* Log over quotas */
+/* Log user quotas */
 $rcmail_config['sendquota_log'] = TRUE;
 
 /* Log errors */
 $rcmail_config['sendquota_log_error'] = TRUE;
 
 /* Log debug */
-$rcmail_config['sendquota_log_debug'] = TRUE;
+$rcmail_config['sendquota_log_debug'] = FALSE;
 
 ?>
