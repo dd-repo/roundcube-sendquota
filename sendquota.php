@@ -1,45 +1,42 @@
 <?php
 /**
- * sendquota
+ * User quota
  *
- * @version 1.0 - 23.03.2012
+ * @version 0.1 - 19.03.2012
  * @author Yann Autissier
  * @website http://www.olympe-network.com
- * @licence GNU GPL V3
- * 
- * this plugin is freely inspired from blockspamsending
- * at http://myroundcube.googlecode.com (thanks !)
+ * @licence GNU GPL
  *
  **/
-
+ 
 /**
  * Usage: This plugin implements quota in roundcube for Olympe Network
  * User account is stored in ldap, and quota in mysql
  *
- **/
-
+ **/ 
+ 
 class sendquota extends rcube_plugin
 {
     public $task = 'mail|settings';
-
+  
     static private $db = null;
     static private $ldb = null;
 
     static private $userId = null;
     static private $userQuota = array( 'used' => null, 'max' => null );
 
-    private $ldap_get_userlogin           = "(&(mail=%email)(objectclass=posixAccount)(objectclass=inetMailUser))";
-    private $sql_select_userid            = "SELECT user_id FROM hosting_user WHERE user_login='%userLogin'";
-    private $sql_select_userquota         = "SELECT quota_used, quota_max FROM hosting_quota WHERE quota_user='%userId' and quota_resource = 5";
-    private $sql_update_userquota         = "UPDATE hosting_quota SET quota_used=%quota WHERE quota_user='%userId' and quota_resource = 5";
+    private $ldap_get_userlogin       = '(&(mail=%email)(objectclass=posixAccount)(objectclass=mailRecipient))';
+    private $sql_select_userid        = "SELECT user_id FROM users WHERE user_name='%userLogin'";
+    private $sql_select_userquota     = "SELECT quota_used, quota_max FROM user_quota WHERE user_id='%userId' and quota_id = 15";
+    private $sql_update_userquota     = "UPDATE user_quota SET quota_used=%quota WHERE user_id='%userId' and quota_id = 15";
 
     /* unified plugin properties */
     static private $plugin = 'sendquota';
     static private $author = 'support@olympe-network.com';
     static private $authors_comments = null;
-    static private $download = 'http://github.com/anotherservice/sendquota';
-    static private $version = '1.0';
-    static private $date = '23-03-2012';
+    static private $download = 'http://github.com/olympenetwork/sendquota';
+    static private $version = '0.1';
+    static private $date = '22-03-2012';
     static private $licence = 'GPL';
     static private $requirements = array(
         'Roundcube' => '0.7.1',
@@ -59,20 +56,25 @@ class sendquota extends rcube_plugin
         }
         $this->add_hook( 'message_outgoing_headers', array( $this,'sendquota_check' ) );
     }
-
+ 
     static public function about($keys = false)
     {
         $requirements = self::$requirements;
-        foreach(array('required_', 'recommended_') as $prefix){
-            if(is_array($requirements[$prefix.'plugins'])){
-                foreach($requirements[$prefix.'plugins'] as $plugin => $method){
-                    if(class_exists($plugin) && method_exists($plugin, 'about')){
+        foreach(array('required_', 'recommended_') as $prefix)
+        {
+            if(is_array($requirements[$prefix.'plugins']))
+            {
+                foreach($requirements[$prefix.'plugins'] as $plugin => $method)
+                {
+                    if(class_exists($plugin) && method_exists($plugin, 'about'))
+                    {
                         $requirements[$prefix.'plugins'][$plugin] = array(
                             'method' => $method,
                             'plugin' => $plugin::about($keys),
                         );
                     }
-                    else{
+                    else
+                    {
                         $requirements[$prefix.'plugins'][$plugin] = array(
                             'method' => $method,
                             'plugin' => $plugin,
@@ -82,7 +84,8 @@ class sendquota extends rcube_plugin
             }
         }
         $rcmail_config = array();
-        if(is_string(self::$config_dist)){
+        if(is_string(self::$config_dist))
+        {
             if(is_file($file = INSTALL_PATH . 'plugins/' . self::$plugin . '/' . self::$config_dist))
                 include $file;
             else
@@ -102,26 +105,31 @@ class sendquota extends rcube_plugin
             $ret['config'] = array_merge($rcmail_config, array_flip(self::$prefs));
         else
             $ret['config'] = $rcmail_config;
-        if(is_array($keys)){
+        if(is_array($keys))
+        {
             $return = array('plugin' => self::$plugin);
-            foreach($keys as $key){
+            foreach($keys as $key)
+            {
                 $return[$key] = $ret[$key];
             }
             return $return;
         }
-        else{
+        else
+        {
             return $ret;
         }
     }
-
+  
     function sendquota_check($args)
     {
         $rcmail = rcmail::get_instance();
-        if(get_input_value('_draft', RCUBE_INPUT_POST)){
+        if(get_input_value('_draft', RCUBE_INPUT_POST))
+        {
+            $this->log_debug( 'SendQuota plugin disabled in draft mode' );
             return $args;
         }
 
-        if( is_array( $rcmail->config->get('no_sendquota') ) && in_array( $rcmail->user->data['username'], $no_quota ) )
+        if( is_array( $rcmail->config->get('no_sendquota') ) && in_array( $rcmail->user->data['username'], $rcmail->config->get('no_sendquota') ) )
         {
             $this->log_debug( 'Quota disabled for user '.$rcmail->user->data['username'] );
             return $args;
@@ -134,18 +142,24 @@ class sendquota extends rcube_plugin
             if( !$this->db )
             {
                 $this->log_error(mysql_error());
+                $rcmail->output->command('display_message',sprintf(rcube_label('sendquota_init_mysql_error','sendquota')),'error');
+                $rcmail->output->send('iframe');
                 return $args;
             }
             $db = @mysql_select_db( $mysql_base );
             if( !$db )
             {
                 $this->log_error(mysql_error());
+                $rcmail->output->command('display_message',sprintf(rcube_label('sendquota_init_mysql_error','sendquota')),'error');
+                $rcmail->output->send('iframe');
                 return $args;
             }
         }
         else
         {
-            $this->log("FATAL ERROR ::: RoundCube Plugin ::: sendquota ::: \$rcmail_config['db_sendquota_host'] or \$rcmail_config['db_sendquota_user']or \$rcmail_config['db_sendquota_pass']    or \$rcmail_config['db_sendquota_base'] not configured !!!");
+            $this->log("FATAL ERROR ::: RoundCube Plugin ::: sendquota ::: \$rcmail_config['db_sendquota_host'] or \$rcmail_config['db_sendquota_user']or \$rcmail_config['db_sendquota_pass']  or \$rcmail_config['db_sendquota_base'] not configured !!!");
+            $rcmail->output->command('display_message',sprintf(rcube_label('sendquota_init_mysql_error','sendquota')),'error');
+            $rcmail->output->send('iframe');
             return $args;
         }
 
@@ -160,6 +174,8 @@ class sendquota extends rcube_plugin
             if( !$this->ldb )
             {
                 $this->log_error('Unable to connect to server '.$ldap_host);
+                $rcmail->output->command('display_message',sprintf(rcube_label('sendquota_init_ldap_error','sendquota')),'error');
+                $rcmail->output->send('iframe');
                 return $args;
             }
             ldap_set_option($this->ldb, LDAP_OPT_PROTOCOL_VERSION, 3);
@@ -167,12 +183,16 @@ class sendquota extends rcube_plugin
             if( !$bind )
             {
                 $this->log_error(ldap_error($this->ldb));
+                $rcmail->output->command('display_message',sprintf(rcube_label('sendquota_init_ldap_error','sendquota')),'error');
+                $rcmail->output->send('iframe');
                 return $args;
             }
         }
         else
         {
             $this->log("FATAL ERROR ::: RoundCube Plugin ::: sendquota ::: \$rcmail_config['ldap_host'] not configured !!!");
+            $rcmail->output->command('display_message',sprintf(rcube_label('sendquota_init_ldap_error','sendquota')),'error');
+            $rcmail->output->send('iframe');
             return $args;
         }
 
@@ -181,10 +201,10 @@ class sendquota extends rcube_plugin
 
         // count mail recipients
         $count = 0;
-        $to    = $args['headers']['To'];
+        $to  = $args['headers']['To'];
         if( $to != '' )
             $count += count( explode( ',', $to ) );
-        $cc    = $args['headers']['Cc'];
+        $cc  = $args['headers']['Cc'];
         if( $cc != '' )
             $count += count( explode( ',', $cc ) );
         $bcc = $args['headers']['Bcc'];
@@ -217,14 +237,14 @@ class sendquota extends rcube_plugin
         // get user quota
         if( !$this->getUserQuota() )
         {
-            $this->log_error('Unable to get quota for user : '.$rcmail->user->data['username'].' --> IP : '.$this->getVisitorIP());
+            $this->log_error('Unable to get quota for user : '.$this->userLogin.' --> IP : '.$this->getVisitorIP());
             $rcmail->output->command('display_message',sprintf(rcube_label('sendquota_getuserquota_error','sendquota')),'error');
             $rcmail->output->send('iframe');
         }
         // check user quota
         if( $this->userQuota['used'] + $count > $this->userQuota['max'] )
         {
-            $this->log('Quota Excedeed for user '.$rcmail->user->data['username'].' : '.$this->userQuota['used'].' + '.$count.' > '.$this->userQuota['max'].' --> IP: '.$this->getVisitorIP());
+            $this->log('Quota excedeed for user '.$this->userLogin.' : '.$this->userQuota['used'].' + '.$count.' > '.$this->userQuota['max'].' --> IP: '.$this->getVisitorIP());
             $rcmail->output->command('display_message',sprintf(rcube_label('sendquota_msg','sendquota'),$this->userQuota['max']),'error');
             $rcmail->output->send('iframe');
         // update user quota
@@ -233,7 +253,7 @@ class sendquota extends rcube_plugin
         {
             if( !$this->updateUserQuota( $count ) )
             {
-                $this->log_error('Unable to update quota for user : '.$rcmail->user->data['username'].' ( used : '.$this->userQuota['used'].' / count : '.$count.' ) --> IP : '.$this->getVisitorIP());
+                $this->log_error('Unable to update quota for user : '.$this->userLogin.' ( used : '.$this->userQuota['used'].' / count : '.$count.' ) --> IP : '.$this->getVisitorIP());
                 $rcmail->output->command('display_message',sprintf(rcube_label('sendquota_updateuserquota_error','sendquota'),$rcmail->config->get('sendquota')),'error');
                 $rcmail->output->send('iframe');
             }
@@ -241,7 +261,7 @@ class sendquota extends rcube_plugin
 
         $close = @mysql_close( $this->db );
         $quota = $this->userQuota['used'] + $count;
-        $this->log( 'quota updated for user : '.$rcmail->user->data['username'].', quota : '.$quota.', IP : '.$this->getVisitorIP() );
+        $this->log( 'Quota updated for user : '.$this->userLogin.', sent : '.$quota.', IP : '.$this->getVisitorIP() );
         return $args;
 
     }
@@ -252,7 +272,7 @@ class sendquota extends rcube_plugin
         $filter = str_replace('%email', $rcmail->user->data['username'], $this->ldap_get_userlogin);
         if( $ldap_dn = $rcmail->config->get('ldap_sendquota_dn') )
         {
-            $ldap_attributes = array( 'manager' );
+            $ldap_attributes = array( 'owner' );
             $search = @ldap_search( $this->ldb, $ldap_dn, $filter, $ldap_attributes );
             if( !$search )
             {
@@ -269,19 +289,50 @@ class sendquota extends rcube_plugin
             }
             foreach( $entries as $entry )
             {
-                if( is_array( $entry['manager'] ) )
+                if( is_array( $entry['owner'] ) )
                 {
-                    foreach( $entry['manager'] as $manager)
+                    foreach( $entry['owner'] as $owner)
                     {
-                        $account = explode( ',', $manager );
-                        if( count( $account ) ==    4 && $account[1] == 'dc=olympe-network' )
+                        $account = explode( ',', $owner );
+                        if( count( $account ) ==  5 && $account[2] == 'dc=olympe' )
                         {
-                            $this->userLogin = str_replace( 'dc=', '', $account[0] );
-                            $this->log_debug('userLogin : '.$this->userLogin );
-                            return true;
+                            if( $account[0] == 'uid=admin' )
+                            {
+                                $mail = explode( '@' , $rcmail->user->data['username'] );
+                                if( $mail[1] == 'olympe.in' )
+                                {
+                                    $this->userLogin = $mail[0];
+                                    $this->log_debug('userLogin : '.$this->userLogin );
+                                    return true;
+                                }
+                            }
+                            else
+                            {
+                                $this->userLogin = str_replace( 'uid=', '', $account[0] );
+                                $this->log_debug('userLogin : '.$this->userLogin );
+                                return true;
+                            }
                         }
+                        else
+                        {
+                            $this->log_debug('owner : '.$owner );
+                        } 
                     }
                 }
+                else
+                {
+                    $account = explode( ',', $entry['dn'] );
+                    if( count( $account ) ==  5 && $account[2] == 'dc=olympe' )
+                    {
+                        $this->userLogin = str_replace( 'uid=', '', $account[0] );
+                        $this->log_debug('userLogin : '.$this->userLogin );
+                        return true;
+                    }
+                    else
+                    {
+                        $this->log_debug('dn : '.$entry['dn'] );
+                    } 
+                } 
             }
         }
         else
@@ -294,7 +345,7 @@ class sendquota extends rcube_plugin
     }
 
     function getUserId()
-    {
+    { 
         $rcmail = rcmail::get_instance();
         $sql = str_replace('%userLogin', $this->userLogin, $this->sql_select_userid );
         $res = @mysql_query( $sql, $this->db );
@@ -322,7 +373,7 @@ class sendquota extends rcube_plugin
     }
 
     function getUserQuota()
-    {
+    { 
         $rcmail = rcmail::get_instance();
         $sql = str_replace('%userId', $this->userId, $this->sql_select_userquota);
         $res = @mysql_query( $sql, $this->db );
@@ -350,7 +401,7 @@ class sendquota extends rcube_plugin
     }
 
     function updateUserQuota( $count )
-    {
+    { 
         $rcmail = rcmail::get_instance();
         $quota = $this->userQuota['used'] + $count;
         $sql = $this->sql_update_userquota;
@@ -372,29 +423,32 @@ class sendquota extends rcube_plugin
         return false;
     }
 
-    function getVisitorIP() {
+    function getVisitorIP()
+    { 
 
-        //Regular expression pattern for a valid IP address
-        $ip_regexp = "/^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})/";
+        //Regular expression pattern for a valid IP address 
+        $ip_regexp = "/^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})/"; 
 
-        //Retrieve IP address from which the user is viewing the current page
-        if (isset ($HTTP_SERVER_VARS["HTTP_X_FORWARDED_FOR"]) && !empty ($HTTP_SERVER_VARS["HTTP_X_FORWARDED_FOR"])) {
-            $visitorIP = (!empty ($HTTP_SERVER_VARS["HTTP_X_FORWARDED_FOR"])) ? $HTTP_SERVER_VARS["HTTP_X_FORWARDED_FOR"] : ((!empty ($HTTP_ENV_VARS['HTTP_X_FORWARDED_FOR'])) ? $HTTP_ENV_VARS['HTTP_X_FORWARDED_FOR'] : @ getenv ('HTTP_X_FORWARDED_FOR'));
-        }
-        else {
-            $visitorIP = (!empty ($HTTP_SERVER_VARS['REMOTE_ADDR'])) ? $HTTP_SERVER_VARS['REMOTE_ADDR'] : ((!empty ($HTTP_ENV_VARS['REMOTE_ADDR'])) ? $HTTP_ENV_VARS['REMOTE_ADDR'] : @ getenv ('REMOTE_ADDR'));
-        }
+        //Retrieve IP address from which the user is viewing the current page 
+        if (isset ($HTTP_SERVER_VARS["HTTP_X_FORWARDED_FOR"]) && !empty ($HTTP_SERVER_VARS["HTTP_X_FORWARDED_FOR"]))
+        { 
+            $visitorIP = (!empty ($HTTP_SERVER_VARS["HTTP_X_FORWARDED_FOR"])) ? $HTTP_SERVER_VARS["HTTP_X_FORWARDED_FOR"] : ((!empty ($HTTP_ENV_VARS['HTTP_X_FORWARDED_FOR'])) ? $HTTP_ENV_VARS['HTTP_X_FORWARDED_FOR'] : @ getenv ('HTTP_X_FORWARDED_FOR')); 
+        } 
+        else
+        { 
+            $visitorIP = (!empty ($HTTP_SERVER_VARS['REMOTE_ADDR'])) ? $HTTP_SERVER_VARS['REMOTE_ADDR'] : ((!empty ($HTTP_ENV_VARS['REMOTE_ADDR'])) ? $HTTP_ENV_VARS['REMOTE_ADDR'] : @ getenv ('REMOTE_ADDR')); 
+        } 
 
-        return $visitorIP;
-    }
-
+        return $visitorIP; 
+    }   
+  
     function log( $log )
     {
         $rcmail = rcmail::get_instance();
         if( $rcmail->config->get( 'sendquota_log' ) )
         {
             write_log( 'sendquota', $log );
-        }
+        }  
     }
 
     function log_error( $log )
@@ -403,7 +457,7 @@ class sendquota extends rcube_plugin
         if( $rcmail->config->get( 'sendquota_log_error' ) )
         {
             write_log( 'sendquota', $log );
-        }
+        }  
     }
 
     function log_debug( $log )
@@ -412,7 +466,7 @@ class sendquota extends rcube_plugin
         if( $rcmail->config->get( 'sendquota_log_debug' ) )
         {
             write_log( 'sendquota', $log );
-        }
+        }  
     }
 
 }
